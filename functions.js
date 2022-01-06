@@ -1,6 +1,7 @@
 "use strict";
 exports.__esModule = true;
 var fs = require("fs");
+var config = require("./config.json");
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
 /////// - FUNCTIONS CALLED BY TERMINAL - ///////
@@ -80,7 +81,7 @@ var monthFileFormatAndPath = function (month, year) {
     if (month <= 0) {
         monthToUse = (12 - month);
     }
-    return "C:/Users/Will Seese/Dev/time-clock/logs/Log-" + monthToUse + "_" + year;
+    return "".concat(config.rootPath, "/logs/Log-").concat(monthToUse, "_").concat(year);
 };
 /////// - FILE OPERATIONS - ////////
 /**
@@ -121,24 +122,24 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
     console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct");
     var lastClockOut = determineLastClockOut(recentShifts, clockIn);
     var lastClockIn = determineLastClockIn(recentShifts, clockIn);
-    var lastClockOutString = recentShifts ? (lastClockOut ? "Last clock-out: " + new Date(lastClockOut).toLocaleString() : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
-    var lastClockInString = recentShifts ? (lastClockIn ? "Last clock-in: " + new Date(lastClockIn).toLocaleString() : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
+    var lastClockOutString = recentShifts ? (lastClockOut ? "Last clock-out: ".concat(new Date(lastClockOut).toLocaleString()) : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
+    var lastClockInString = recentShifts ? (lastClockIn ? "Last clock-in: ".concat(new Date(lastClockIn).toLocaleString()) : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
     var hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, clockIn ? "clockIn" : "clockOut", !clockIn); //parent function only called on clocking in or out, not status or stat checks
     var hoursThisWeek = getHoursForWeekContainingDate();
     var hoursLastWeek = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7));
     var _a = getFourAndEightWeekAverageHours(), fourWeekAverage = _a.fourWeekAverage, eightWeekAverage = _a.eightWeekAverage;
     var _b = getFourAndEightWeekAverageDays(), fourWeekAverageDays = _b.fourWeekAverageDays, eightWeekAverageDays = _b.eightWeekAverageDays;
     var callLogs = function () {
-        console.log("Successfully clocked " + (clockIn ? "in" : "out") + " at " + timeComponents.timeString);
+        console.log("Successfully clocked ".concat(clockIn ? "in" : "out", " at ").concat(timeComponents.timeString));
         if (recentShifts) {
             console.log(lastClockInString);
             console.log(lastClockOutString);
         }
-        console.log("Worked " + hoursAndShiftsToday.totalHours + " hours today in " + hoursAndShiftsToday.totalShifts + " shifts");
-        console.log("Hours this week: " + hoursThisWeek);
-        console.log("Hours last week: " + hoursLastWeek);
-        console.log("4 week average hours: " + fourWeekAverage + "; days: " + fourWeekAverageDays);
-        console.log("8 week average hours: " + eightWeekAverage + "; days; " + eightWeekAverageDays);
+        console.log("Worked ".concat(hoursAndShiftsToday.totalHours, " hours today in ").concat(hoursAndShiftsToday.totalShifts, " shifts"));
+        console.log("Hours this week: ".concat(hoursThisWeek));
+        console.log("Hours last week: ".concat(hoursLastWeek));
+        console.log("4 week average hours: ".concat(fourWeekAverage, "; days: ").concat(fourWeekAverageDays));
+        console.log("8 week average hours: ".concat(eightWeekAverage, "; days; ").concat(eightWeekAverageDays));
     };
     return {
         timeComponents: timeComponents,

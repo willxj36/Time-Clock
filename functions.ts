@@ -1,5 +1,6 @@
 const fs = require("fs")
 import * as Interfaces from "./interfaces"
+import * as config from "./config.json"
 
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
@@ -86,7 +87,7 @@ const monthFileFormatAndPath = (month: number, year: number) => {
 	if(month <= 0) {
 		monthToUse = (12 - month)
 	}
-	return `C:/Users/Will Seese/Dev/time-clock/logs/Log-${monthToUse}_${year}`
+	return `${config.rootPath}/logs/Log-${monthToUse}_${year}`
 }
 
 /////// - FILE OPERATIONS - ////////
