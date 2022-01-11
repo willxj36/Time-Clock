@@ -7,6 +7,8 @@ export interface TimeComponents {
 	ms: number
 }
 
+export type ManualTime = [string, string, string, string, string]
+
 export interface MonthLog {
 	[date: number]: Shift[]
 }

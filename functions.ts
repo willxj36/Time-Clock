@@ -1,6 +1,6 @@
 const fs = require("fs")
 import * as Interfaces from "./interfaces"
-import * as config from "./config.json"
+const config = require("./config.json")
 
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
@@ -10,7 +10,7 @@ import * as config from "./config.json"
 /**
  * clockInTime should be in ms as string
  */
-module.exports.clockIn = function (clockInTime?: string) {
+module.exports.clockIn = function (clockInTime: Interfaces.ManualTime) {
 	const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockInTime, true)
 
 	if(!!currentMonthLog[timeComponents.date]) {
@@ -24,7 +24,7 @@ module.exports.clockIn = function (clockInTime?: string) {
 	callLogs()
 }
 
-module.exports.clockOut = function (clockOutTime?: string) {
+module.exports.clockOut = function (clockOutTime: Interfaces.ManualTime) {
 	const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockOutTime, false)
 
 	//can't abstract into variables since we're writing directly to object here
@@ -90,6 +90,15 @@ const monthFileFormatAndPath = (month: number, year: number) => {
 	return `${config.rootPath}/logs/Log-${monthToUse}_${year}`
 }
 
+const getHoursAndMinutesFromDecimalHours = (hoursDecimal: number) => {
+	//hours should never be negative, so this shouldn't cause any issues
+	const hours = Math.floor(hoursDecimal)
+	//always rounds up, acceptable for the intended use of this program
+	const minutes = Math.ceil((hoursDecimal - hours) * 60)
+	
+	return `${hours}:${minutes}`
+}
+
 /////// - FILE OPERATIONS - ////////
 
 /**
@@ -118,8 +127,27 @@ const writeMonthLog = (month: number, year: number, data: Interfaces.MonthLog) =
 
 /////// - GETTING INFO FROM INPUT INFORMATION - ///////
 
-const getNeededInfoForClocking = (clockTime: string | undefined, clockIn: boolean) => {
-	const timeToUse = clockTime? new Date(parseInt(clockTime)) : new Date()
+const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boolean) => {
+	let validManualTime = true
+	//terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
+	//TODO: handle falsy values at different indeces differently
+	for(let i = 0 ; i < 5 ; i++) {
+		if(!!!clockTime[i]) {
+			validManualTime = false
+			break
+		}
+	}
+	let timeToUse: Date
+	if(!validManualTime) {
+		timeToUse = new Date()
+	} else {
+		const numberClockTime = []
+		for(let i = 0 ; i < clockTime.length ; i++) {
+			numberClockTime.push(parseInt(clockTime[i]))
+		}
+		//time is entered with number for calendar month for user-friendliness, but this has to be changed to get the right date object
+		timeToUse = new Date(numberClockTime[0], numberClockTime[1] - 1, numberClockTime[2], numberClockTime[3], numberClockTime[4])
+	}
 	const timeComponents = getTimeComponents(timeToUse)
 
 	//months start at 0 in date object - see getMonthLog definition
@@ -148,11 +176,11 @@ const getNeededInfoForClocking = (clockTime: string | undefined, clockIn: boolea
 			console.log(lastClockInString)
 			console.log(lastClockOutString)
 		}
-		console.log(`Worked ${hoursAndShiftsToday.totalHours} hours today in ${hoursAndShiftsToday.totalShifts} shifts`)
-		console.log(`Hours this week: ${hoursThisWeek}`)
-		console.log(`Hours last week: ${hoursLastWeek}`)
-		console.log(`4 week average hours: ${fourWeekAverage}; days: ${fourWeekAverageDays}`)
-		console.log(`8 week average hours: ${eightWeekAverage}; days; ${eightWeekAverageDays}`)
+		console.log(`Worked ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)} hours today in ${hoursAndShiftsToday.totalShifts} shifts`)
+		console.log(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`)
+		console.log(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`)
+		console.log(`4 week average hours: ${getHoursAndMinutesFromDecimalHours(fourWeekAverage)}; days: ${fourWeekAverageDays}`)
+		console.log(`8 week average hours: ${getHoursAndMinutesFromDecimalHours(eightWeekAverage)}; days; ${eightWeekAverageDays}`)
 	}
 
 	return {

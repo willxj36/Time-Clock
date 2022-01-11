@@ -83,6 +83,13 @@ var monthFileFormatAndPath = function (month, year) {
     }
     return "".concat(config.rootPath, "/logs/Log-").concat(monthToUse, "_").concat(year);
 };
+var getHoursAndMinutesFromDecimalHours = function (hoursDecimal) {
+    //hours should never be negative, so this shouldn't cause any issues
+    var hours = Math.floor(hoursDecimal);
+    //always rounds up, acceptable for the intended use of this program
+    var minutes = Math.ceil((hoursDecimal - hours) * 60);
+    return "".concat(hours, ":").concat(minutes);
+};
 /////// - FILE OPERATIONS - ////////
 /**
  * Reads file to retrieve full log for month indicated
@@ -108,7 +115,27 @@ var writeMonthLog = function (month, year, data) {
 };
 /////// - GETTING INFO FROM INPUT INFORMATION - ///////
 var getNeededInfoForClocking = function (clockTime, clockIn) {
-    var timeToUse = clockTime ? new Date(parseInt(clockTime)) : new Date();
+    var validManualTime = true;
+    //terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
+    //TODO: handle falsy values at different indeces differently
+    for (var i = 0; i < 5; i++) {
+        if (!!!clockTime[i]) {
+            validManualTime = false;
+            break;
+        }
+    }
+    var timeToUse;
+    if (!validManualTime) {
+        timeToUse = new Date();
+    }
+    else {
+        var numberClockTime = [];
+        for (var i = 0; i < clockTime.length; i++) {
+            numberClockTime.push(parseInt(clockTime[i]));
+        }
+        //time is entered with number for calendar month for user-friendliness, but this has to be changed to get the right date object
+        timeToUse = new Date(numberClockTime[0], numberClockTime[1] - 1, numberClockTime[2], numberClockTime[3], numberClockTime[4]);
+    }
     var timeComponents = getTimeComponents(timeToUse);
     //months start at 0 in date object - see getMonthLog definition
     var currentMonthLogExists = checkForMonthLog(timeComponents.calendarMonth, timeComponents.year);
@@ -135,11 +162,11 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
             console.log(lastClockInString);
             console.log(lastClockOutString);
         }
-        console.log("Worked ".concat(hoursAndShiftsToday.totalHours, " hours today in ").concat(hoursAndShiftsToday.totalShifts, " shifts"));
-        console.log("Hours this week: ".concat(hoursThisWeek));
-        console.log("Hours last week: ".concat(hoursLastWeek));
-        console.log("4 week average hours: ".concat(fourWeekAverage, "; days: ").concat(fourWeekAverageDays));
-        console.log("8 week average hours: ".concat(eightWeekAverage, "; days; ").concat(eightWeekAverageDays));
+        console.log("Worked ".concat(getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours), " hours today in ").concat(hoursAndShiftsToday.totalShifts, " shifts"));
+        console.log("Hours this week: ".concat(getHoursAndMinutesFromDecimalHours(hoursThisWeek)));
+        console.log("Hours last week: ".concat(getHoursAndMinutesFromDecimalHours(hoursLastWeek)));
+        console.log("4 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(fourWeekAverage), "; days: ").concat(fourWeekAverageDays));
+        console.log("8 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(eightWeekAverage), "; days; ").concat(eightWeekAverageDays));
     };
     return {
         timeComponents: timeComponents,
