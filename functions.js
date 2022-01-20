@@ -88,7 +88,7 @@ var getHoursAndMinutesFromDecimalHours = function (hoursDecimal) {
     var hours = Math.floor(hoursDecimal);
     //always rounds up, acceptable for the intended use of this program
     var minutes = Math.ceil((hoursDecimal - hours) * 60);
-    return "".concat(hours, ":").concat(minutes);
+    return "".concat(hours, "h").concat(minutes, "m");
 };
 /////// - FILE OPERATIONS - ////////
 /**
@@ -119,7 +119,7 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
     //terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
     //TODO: handle falsy values at different indeces differently
     for (var i = 0; i < 5; i++) {
-        if (!!!clockTime[i]) {
+        if (clockTime[i] == undefined) {
             validManualTime = false;
             break;
         }

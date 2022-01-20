@@ -96,7 +96,7 @@ const getHoursAndMinutesFromDecimalHours = (hoursDecimal: number) => {
 	//always rounds up, acceptable for the intended use of this program
 	const minutes = Math.ceil((hoursDecimal - hours) * 60)
 	
-	return `${hours}:${minutes}`
+	return `${hours}h${minutes}m`
 }
 
 /////// - FILE OPERATIONS - ////////
@@ -132,7 +132,7 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 	//terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
 	//TODO: handle falsy values at different indeces differently
 	for(let i = 0 ; i < 5 ; i++) {
-		if(!!!clockTime[i]) {
+		if(clockTime[i] == undefined) {
 			validManualTime = false
 			break
 		}
