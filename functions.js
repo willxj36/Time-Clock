@@ -148,7 +148,7 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
     //shifts only exist after a successful clock-in is written, so lastShift[0] should never have a falsy value
     console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct");
     var lastClockOut = determineLastClockOut(recentShifts, clockIn);
-    var lastClockIn = determineLastClockIn(recentShifts, clockIn);
+    var lastClockIn = determineLastClockIn(recentShifts);
     var lastClockOutString = recentShifts ? (lastClockOut ? "Last clock-out: ".concat(new Date(lastClockOut).toLocaleString()) : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
     var lastClockInString = recentShifts ? (lastClockIn ? "Last clock-in: ".concat(new Date(lastClockIn).toLocaleString()) : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
     var hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, clockIn ? "clockIn" : "clockOut", !clockIn); //parent function only called on clocking in or out, not status or stat checks
@@ -175,13 +175,9 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
         callLogs: callLogs
     };
 };
-var determineLastClockIn = function (recentShifts, clockIn) {
-    if (clockIn) {
-        return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.secondLastShift[0];
-    }
-    else {
-        return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.lastShift[0];
-    }
+var determineLastClockIn = function (recentShifts) {
+    // new clock is not saved until after this function is called, so this will always be the clock-in time of the most recent saved shift
+    return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.lastShift[0];
 };
 var determineLastClockOut = function (recentShifts, clockIn) {
     if (clockIn) {
