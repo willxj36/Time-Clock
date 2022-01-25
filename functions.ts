@@ -99,6 +99,10 @@ const getHoursAndMinutesFromDecimalHours = (hoursDecimal: number) => {
 	return `${hours}h${minutes}m`
 }
 
+const logDivider = () => {
+	return console.log("- - - - - - - - - - - -")
+}
+
 /////// - FILE OPERATIONS - ////////
 
 /**
@@ -130,10 +134,12 @@ const writeMonthLog = (month: number, year: number, data: Interfaces.MonthLog) =
 const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boolean) => {
 	let validManualTime = true
 	//terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
-	//TODO: handle falsy values at different indeces differently
 	for(let i = 0 ; i < 5 ; i++) {
 		if(clockTime[i] == undefined) {
 			validManualTime = false
+			if(i > 0) {
+				throw new Error(`Received ${i} arguments, 5 arguments are required (yr, mo, date, hr, min) for manual time, or no arguments for current system time. Please try again.`)
+			}
 			break
 		}
 	}
@@ -147,6 +153,9 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 		}
 		//time is entered with number for calendar month for user-friendliness, but this has to be changed to get the right date object
 		timeToUse = new Date(numberClockTime[0], numberClockTime[1] - 1, numberClockTime[2], numberClockTime[3], numberClockTime[4])
+		if(timeToUse > new Date()) {
+			throw new Error("Future clock times not allowed")
+		}
 	}
 	const timeComponents = getTimeComponents(timeToUse)
 
@@ -172,13 +181,16 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 
 	const callLogs = () => {
 		console.log(`Successfully clocked ${clockIn ? "in" : "out"} at ${timeComponents.timeString}`)
+		logDivider()
 		if(recentShifts) {
 			console.log(lastClockInString)
 			console.log(lastClockOutString)
+			logDivider()
 		}
 		console.log(`Worked ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)} hours today in ${hoursAndShiftsToday.totalShifts} shifts`)
 		console.log(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`)
 		console.log(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`)
+		logDivider()
 		console.log(`4 week average hours: ${getHoursAndMinutesFromDecimalHours(fourWeekAverage)}; days: ${fourWeekAverageDays}`)
 		console.log(`8 week average hours: ${getHoursAndMinutesFromDecimalHours(eightWeekAverage)}; days; ${eightWeekAverageDays}`)
 	}

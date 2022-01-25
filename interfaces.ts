@@ -2,7 +2,7 @@ export interface TimeComponents {
 	year: number,
 	calendarMonth: number, //named such to remind that the calendar number for month is not the same as date object number
 	date: number,
-	day: number,
+	day: number, //day of the week using index numbers i.e. Sunday is 0, Monday is 1, etc
 	timeString: string,
 	ms: number
 }

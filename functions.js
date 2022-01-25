@@ -90,6 +90,9 @@ var getHoursAndMinutesFromDecimalHours = function (hoursDecimal) {
     var minutes = Math.ceil((hoursDecimal - hours) * 60);
     return "".concat(hours, "h").concat(minutes, "m");
 };
+var logDivider = function () {
+    return console.log("- - - - - - - - - - - -");
+};
 /////// - FILE OPERATIONS - ////////
 /**
  * Reads file to retrieve full log for month indicated
@@ -117,10 +120,12 @@ var writeMonthLog = function (month, year, data) {
 var getNeededInfoForClocking = function (clockTime, clockIn) {
     var validManualTime = true;
     //terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
-    //TODO: handle falsy values at different indeces differently
     for (var i = 0; i < 5; i++) {
         if (clockTime[i] == undefined) {
             validManualTime = false;
+            if (i > 0) {
+                throw new Error("Received ".concat(i, " arguments, 5 arguments are required (yr, mo, date, hr, min) for manual time, or no arguments for current system time. Please try again."));
+            }
             break;
         }
     }
@@ -135,6 +140,9 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
         }
         //time is entered with number for calendar month for user-friendliness, but this has to be changed to get the right date object
         timeToUse = new Date(numberClockTime[0], numberClockTime[1] - 1, numberClockTime[2], numberClockTime[3], numberClockTime[4]);
+        if (timeToUse > new Date()) {
+            throw new Error("Future clock times not allowed");
+        }
     }
     var timeComponents = getTimeComponents(timeToUse);
     //months start at 0 in date object - see getMonthLog definition
@@ -158,13 +166,16 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
     var _b = getFourAndEightWeekAverageDays(), fourWeekAverageDays = _b.fourWeekAverageDays, eightWeekAverageDays = _b.eightWeekAverageDays;
     var callLogs = function () {
         console.log("Successfully clocked ".concat(clockIn ? "in" : "out", " at ").concat(timeComponents.timeString));
+        logDivider();
         if (recentShifts) {
             console.log(lastClockInString);
             console.log(lastClockOutString);
+            logDivider();
         }
         console.log("Worked ".concat(getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours), " hours today in ").concat(hoursAndShiftsToday.totalShifts, " shifts"));
         console.log("Hours this week: ".concat(getHoursAndMinutesFromDecimalHours(hoursThisWeek)));
         console.log("Hours last week: ".concat(getHoursAndMinutesFromDecimalHours(hoursLastWeek)));
+        logDivider();
         console.log("4 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(fourWeekAverage), "; days: ").concat(fourWeekAverageDays));
         console.log("8 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(eightWeekAverage), "; days; ").concat(eightWeekAverageDays));
     };
