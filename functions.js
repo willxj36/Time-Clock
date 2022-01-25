@@ -16,9 +16,14 @@ module.exports.clockIn = function (clockInTime) {
     else {
         currentMonthLog[timeComponents.date] = [[timeComponents.ms, null]];
     }
-    //write to log file when calculations are finished, but wait to write console.logs (hence use of sync)
-    writeMonthLog(timeComponents.calendarMonth, timeComponents.year, currentMonthLog);
-    callLogs();
+    try {
+        //write to log file when calculations are finished, but wait to write console.logs (hence use of sync)
+        writeMonthLog(timeComponents.calendarMonth, timeComponents.year, currentMonthLog);
+        callLogs();
+    }
+    catch (error) {
+        console.error(error);
+    }
 };
 module.exports.clockOut = function (clockOutTime) {
     var _a = getNeededInfoForClocking(clockOutTime, false), timeComponents = _a.timeComponents, currentMonthLog = _a.currentMonthLog, callLogs = _a.callLogs;
@@ -65,9 +70,27 @@ module.exports.clockOut = function (clockOutTime) {
     callLogs();
 };
 module.exports.getStatus = function () {
-    //TODO: get month logs
-    // const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog)
-    //TODO: everything else (remember allshiftsarray can have length of 0)
+    var timeComponents = getTimeComponents(new Date());
+    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth - 1, timeComponents.year);
+    var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
+    var allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
+    var mostRecentShift = allShiftsArray[allShiftsArray.length - 1] || null;
+    if (!mostRecentShift) {
+        console.log("No shifts found in logs");
+    }
+    else {
+        var clockedIn = void 0;
+        if (mostRecentShift[0] && !mostRecentShift[1]) {
+            clockedIn = true;
+            console.log("Currently clocked in since ".concat(new Date(mostRecentShift[0]).toLocaleString()));
+        }
+    }
+    /**
+     * clocked in?
+     * hours worked today
+     * hours worked this week
+     * shifts today
+     */
 };
 /////// - FORMATTING FUNCS - ///////
 /**
@@ -110,8 +133,20 @@ var getMonthLogSafe = function (month, year) {
         return JSON.parse("{}");
     }
 };
-var checkForMonthLog = function (month, year) {
-    return fs.existsSync(monthFileFormatAndPath(month, year));
+/**
+ * Used to get previous month specifically, as it will use time components to determine if prior year needs to be used, and return undefined if there is no log instead of an empty object
+ * @param timeComponents
+ */
+var getPreviousMonthLogSafe = function (timeComponents) {
+    var yearForPreviousMonth = timeComponents.calendarMonth === 1 ? timeComponents.year - 1 : timeComponents.year;
+    var filePath = monthFileFormatAndPath(timeComponents.calendarMonth - 1, yearForPreviousMonth);
+    var fileExists = fs.existsSync(filePath);
+    if (fileExists) {
+        return JSON.parse(fs.readFileSync(filePath, { encoding: "utf-8" }));
+    }
+    else {
+        return undefined;
+    }
 };
 var writeMonthLog = function (month, year, data) {
     fs.writeFileSync(monthFileFormatAndPath(month, year), JSON.stringify(data), { encoding: "utf-8" });
@@ -145,13 +180,8 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
         }
     }
     var timeComponents = getTimeComponents(timeToUse);
-    //months start at 0 in date object - see getMonthLog definition
-    var currentMonthLogExists = checkForMonthLog(timeComponents.calendarMonth, timeComponents.year);
-    var currentMonthLog = currentMonthLogExists ? getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year) : {};
-    //ensure previous year is used if it's currently January
-    var pastMonthLogYear = timeComponents.calendarMonth === 1 ? timeComponents.year - 1 : timeComponents.year;
-    var pastMonthLogExists = checkForMonthLog(timeComponents.calendarMonth - 1, pastMonthLogYear);
-    var pastMonthLog = pastMonthLogExists ? getMonthLogSafe(timeComponents.calendarMonth - 1, pastMonthLogYear) : undefined;
+    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
+    var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
     var recentShifts = getMostRecentShiftsInfo(currentMonthLog, pastMonthLog);
     //shifts only exist after a successful clock-in is written, so lastShift[0] should never have a falsy value
     console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct");
