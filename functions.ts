@@ -72,7 +72,7 @@ module.exports.clockOut = function (clockOutTime: Interfaces.ManualTime) {
 
 module.exports.getStatus = function() {
 	const timeComponents = getTimeComponents(new Date())
-	const currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth - 1, timeComponents.year)
+	const currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year)
 	const pastMonthLog = getPreviousMonthLogSafe(timeComponents)
 	const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog)
 
@@ -80,6 +80,8 @@ module.exports.getStatus = function() {
 	if(!mostRecentShift) {
 		console.log("No shifts found in logs")
 	} else {
+		console.log(currentMonthLog)
+		console.log("most recent shift", mostRecentShift)
 		let clockedIn: boolean
 		if(mostRecentShift[0] && !mostRecentShift[1]) {
 			clockedIn = true
@@ -98,16 +100,18 @@ module.exports.getStatus = function() {
 
 /**
  * Single source of truth for file format and path
- * @param actualMonth calendar number for month e.g. 12 for December, not Date object number for month e.g. 11 for December
+ * @param calendarMonth calendar number for month e.g. 12 for December, not Date object number for month e.g. 11 for December
  * @param year 
  * @returns proper file format
  */
-const monthFileFormatAndPath = (month: number, year: number) => {
-	let monthToUse = month
-	if(month <= 0) {
-		monthToUse = (12 - month)
+const monthFileFormatAndPath = (calendarMonth: number, year: number) => {
+	let monthToUse = calendarMonth
+	let yearToUse = year
+	if(calendarMonth <= 0) {
+		monthToUse = (12 - calendarMonth)
+		yearToUse = year - 1
 	}
-	return `${config.rootPath}/logs/Log-${monthToUse}_${year}`
+	return `${config.rootPath}/logs/Log-${monthToUse}_${yearToUse}`
 }
 
 const getHoursAndMinutesFromDecimalHours = (hoursDecimal: number) => {
@@ -127,12 +131,12 @@ const logDivider = () => {
 
 /**
  * Reads file to retrieve full log for month indicated
- * @param month Date object month e.g. 11 for December
+ * @param calendarMonth calendar month number
  * @param year 
  * @returns JSON object of current month log
  */
-const getMonthLogSafe = (month: number, year: number): Interfaces.MonthLog => {
-	const filePath = monthFileFormatAndPath(month, year)
+const getMonthLogSafe = (calendarMonth: number, year: number): Interfaces.MonthLog => {
+	const filePath = monthFileFormatAndPath(calendarMonth, year)
 	const fileExists = fs.existsSync(filePath)
 	if(fileExists) {
 		return JSON.parse(fs.readFileSync(filePath, {encoding: "utf-8"}))

@@ -71,7 +71,7 @@ module.exports.clockOut = function (clockOutTime) {
 };
 module.exports.getStatus = function () {
     var timeComponents = getTimeComponents(new Date());
-    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth - 1, timeComponents.year);
+    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
     var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
     var allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
     var mostRecentShift = allShiftsArray[allShiftsArray.length - 1] || null;
@@ -79,6 +79,8 @@ module.exports.getStatus = function () {
         console.log("No shifts found in logs");
     }
     else {
+        console.log(currentMonthLog);
+        console.log("most recent shift", mostRecentShift);
         var clockedIn = void 0;
         if (mostRecentShift[0] && !mostRecentShift[1]) {
             clockedIn = true;
@@ -95,16 +97,18 @@ module.exports.getStatus = function () {
 /////// - FORMATTING FUNCS - ///////
 /**
  * Single source of truth for file format and path
- * @param actualMonth calendar number for month e.g. 12 for December, not Date object number for month e.g. 11 for December
+ * @param calendarMonth calendar number for month e.g. 12 for December, not Date object number for month e.g. 11 for December
  * @param year
  * @returns proper file format
  */
-var monthFileFormatAndPath = function (month, year) {
-    var monthToUse = month;
-    if (month <= 0) {
-        monthToUse = (12 - month);
+var monthFileFormatAndPath = function (calendarMonth, year) {
+    var monthToUse = calendarMonth;
+    var yearToUse = year;
+    if (calendarMonth <= 0) {
+        monthToUse = (12 - calendarMonth);
+        yearToUse = year - 1;
     }
-    return "".concat(config.rootPath, "/logs/Log-").concat(monthToUse, "_").concat(year);
+    return "".concat(config.rootPath, "/logs/Log-").concat(monthToUse, "_").concat(yearToUse);
 };
 var getHoursAndMinutesFromDecimalHours = function (hoursDecimal) {
     //hours should never be negative, so this shouldn't cause any issues
@@ -119,12 +123,12 @@ var logDivider = function () {
 /////// - FILE OPERATIONS - ////////
 /**
  * Reads file to retrieve full log for month indicated
- * @param month Date object month e.g. 11 for December
+ * @param calendarMonth calendar month number
  * @param year
  * @returns JSON object of current month log
  */
-var getMonthLogSafe = function (month, year) {
-    var filePath = monthFileFormatAndPath(month, year);
+var getMonthLogSafe = function (calendarMonth, year) {
+    var filePath = monthFileFormatAndPath(calendarMonth, year);
     var fileExists = fs.existsSync(filePath);
     if (fileExists) {
         return JSON.parse(fs.readFileSync(filePath, { encoding: "utf-8" }));
