@@ -4,6 +4,7 @@ const config = require("./config.json")
 
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
+//TODO: handle shifts that stretch over midnight for the logging
 
 /////// - FUNCTIONS CALLED BY TERMINAL - ///////
 
@@ -71,7 +72,8 @@ module.exports.clockOut = function (clockOutTime: Interfaces.ManualTime) {
 }
 
 module.exports.getStatus = function() {
-	const timeComponents = getTimeComponents(new Date())
+	const currentDateObject = new Date()
+	const timeComponents = getTimeComponents(currentDateObject)
 	const currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year)
 	const pastMonthLog = getPreviousMonthLogSafe(timeComponents)
 	const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog)
@@ -80,12 +82,28 @@ module.exports.getStatus = function() {
 	if(!mostRecentShift) {
 		console.log("No shifts found in logs")
 	} else {
-		console.log(currentMonthLog)
-		console.log("most recent shift", mostRecentShift)
+		const invalidShifts = getInvalidShifts(allShiftsArray)
 		let clockedIn: boolean
 		if(mostRecentShift[0] && !mostRecentShift[1]) {
 			clockedIn = true
 			console.log(`Currently clocked in since ${new Date(mostRecentShift[0]).toLocaleString()}`)
+		} else {
+			clockedIn = false
+			console.log(`Currently clocked out since ${new Date(mostRecentShift[1]).toLocaleString()}`)
+		}
+		logDivider()
+		const { totalHours, totalShifts } = getHoursAndShiftsWorkedForDay(currentDateObject, clockedIn)
+		console.log(`Today's hours: ${getHoursAndMinutesFromDecimalHours(totalHours)}`)
+		console.log(`Today's shifts: ${totalShifts}`)
+		logDivider()
+		console.log(`${invalidShifts.length || "No"} invalid shift${invalidShifts.length !== 1 ? "s": ""} in current month and last month logs`)
+		if(invalidShifts.length) {
+			console.log("Invalid shifts:")
+			invalidShifts.forEach(shift => {
+				const startTimeComponents = !!shift[0] ? getTimeComponents(new Date(shift[0])) : null
+				const endTimeComponents = !!shift[1] ? getTimeComponents(new Date(shift[1])) : null
+				console.log(`IN: ${startTimeComponents ? startTimeComponents.timeString : "MISSING"}     |     OUT: ${endTimeComponents ? endTimeComponents.timeString : "MISSING"}`)
+			})
 		}
 	}
 	/**
@@ -203,7 +221,7 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 	const lastClockIn = determineLastClockIn(recentShifts)
 	const lastClockOutString = recentShifts ? (lastClockOut ? `Last clock-out: ${new Date(lastClockOut).toLocaleString()}` : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months"
 	const lastClockInString = recentShifts ? (lastClockIn ? `Last clock-in: ${new Date(lastClockIn).toLocaleString()}` : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months"
-	const hoursAndShiftsToday: Interfaces.HoursAndShifts = getHoursAndShiftsWorkedForDay(timeToUse, clockIn ? "clockIn" : "clockOut", !clockIn) //parent function only called on clocking in or out, not status or stat checks
+	const hoursAndShiftsToday: Interfaces.HoursAndShifts = getHoursAndShiftsWorkedForDay(timeToUse, !clockIn) //parent function only called on clocking in or out, not status or stat checks
 	const hoursThisWeek: number = getHoursForWeekContainingDate()
 	const hoursLastWeek: number = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7))
 	const { fourWeekAverage, eightWeekAverage } = getFourAndEightWeekAverageHours()
@@ -217,7 +235,8 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 			console.log(lastClockOutString)
 			logDivider()
 		}
-		console.log(`Worked ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)} hours today in ${hoursAndShiftsToday.totalShifts} shifts`)
+		console.log(`Hours today: ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)}`)
+		console.log(`Shifts today: ${hoursAndShiftsToday.totalShifts}`)
 		console.log(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`)
 		console.log(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`)
 		logDivider()
@@ -279,19 +298,14 @@ const getMostRecentShiftsInfo = (currentMonthLog: Interfaces.MonthLog, pastMonth
 	return { lastShift, secondLastShift }
 }
 
-const getHoursAndShiftsWorkedForDay = (clockTime: Date, typeOfCheck: Interfaces.ClockEventTypes, clockedIn: boolean): Interfaces.HoursAndShifts => {
+const getHoursAndShiftsWorkedForDay = (clockTime: Date, clockedIn: boolean): Interfaces.HoursAndShifts => {
 	const clockTimeComponents = getTimeComponents(clockTime)
 	const currentMonthLog: Interfaces.MonthLog = getMonthLogSafe(clockTimeComponents.calendarMonth, clockTimeComponents.year)
 	const todayShifts: Interfaces.Shift[] = currentMonthLog[clockTimeComponents.date] || []
 	const totalHours = todayShifts.reduce((cumHours, shift, shiftIndex, shiftArray) => {
 		//check for scenarios where the most recent shift shouldn't have a clock-out, then add a value when last shift is reached
 		if(clockedIn && (shiftIndex === shiftArray.length - 1)) {
-			let timeToUse
-			if(typeOfCheck === "clockOut") {
-				timeToUse = clockTime.getTime()
-			} else if(typeOfCheck === "check") {
-				timeToUse = clockTimeComponents.ms
-			}
+			const timeToUse = clockTimeComponents.ms
 			return cumHours + ((timeToUse - shift[0])/3600000)
 		} else {
 			//if any shift but last has a missing clock, don't add any time. A log should already have been thrown for the missed clocks.
@@ -431,4 +445,23 @@ const getTimeComponents = (dateObject: Date): Interfaces.TimeComponents => {
 		timeString: dateObject.toLocaleString(),
 		ms: dateObject.getTime()
 	}
+}
+
+/**
+ * Used to filter shifts to get an array of shifts with missed clock-in/clock-out
+ * @param allShifts array of allShifts from current and previous month logs
+ * @returns filtered array of same type with only invalid shifts
+ */
+const getInvalidShifts = (allShifts: Interfaces.Shift[]): Interfaces.Shift[] => {
+	const invalidShifts: Interfaces.Shift[] = allShifts.filter((shift, index) => {
+		if(index !== allShifts.length - 1) {
+			// if not at last index, any null value means missed clock/invalid shift
+			return !shift[0] || !shift[1]
+		} else {
+			// if at last index, null value for clock-in means missed clock/invalid shift
+			return !shift[0]
+		}
+	})
+
+	return invalidShifts
 }

@@ -4,6 +4,7 @@ var fs = require("fs");
 var config = require("./config.json");
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
+//TODO: handle shifts that stretch over midnight for the logging
 /////// - FUNCTIONS CALLED BY TERMINAL - ///////
 /**
  * clockInTime should be in ms as string
@@ -70,7 +71,8 @@ module.exports.clockOut = function (clockOutTime) {
     callLogs();
 };
 module.exports.getStatus = function () {
-    var timeComponents = getTimeComponents(new Date());
+    var currentDateObject = new Date();
+    var timeComponents = getTimeComponents(currentDateObject);
     var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
     var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
     var allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
@@ -79,12 +81,29 @@ module.exports.getStatus = function () {
         console.log("No shifts found in logs");
     }
     else {
-        console.log(currentMonthLog);
-        console.log("most recent shift", mostRecentShift);
+        var invalidShifts = getInvalidShifts(allShiftsArray);
         var clockedIn = void 0;
         if (mostRecentShift[0] && !mostRecentShift[1]) {
             clockedIn = true;
             console.log("Currently clocked in since ".concat(new Date(mostRecentShift[0]).toLocaleString()));
+        }
+        else {
+            clockedIn = false;
+            console.log("Currently clocked out since ".concat(new Date(mostRecentShift[1]).toLocaleString()));
+        }
+        logDivider();
+        var _a = getHoursAndShiftsWorkedForDay(currentDateObject, clockedIn), totalHours = _a.totalHours, totalShifts = _a.totalShifts;
+        console.log("Today's hours: ".concat(getHoursAndMinutesFromDecimalHours(totalHours)));
+        console.log("Today's shifts: ".concat(totalShifts));
+        logDivider();
+        console.log("".concat(invalidShifts.length || "No", " invalid shift").concat(invalidShifts.length !== 1 ? "s" : "", " in current month and last month logs"));
+        if (invalidShifts.length) {
+            console.log("Invalid shifts:");
+            invalidShifts.forEach(function (shift) {
+                var startTimeComponents = !!shift[0] ? getTimeComponents(new Date(shift[0])) : null;
+                var endTimeComponents = !!shift[1] ? getTimeComponents(new Date(shift[1])) : null;
+                console.log("IN: ".concat(startTimeComponents ? startTimeComponents.timeString : "MISSING", "     |     OUT: ").concat(endTimeComponents ? endTimeComponents.timeString : "MISSING"));
+            });
         }
     }
     /**
@@ -193,7 +212,7 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
     var lastClockIn = determineLastClockIn(recentShifts);
     var lastClockOutString = recentShifts ? (lastClockOut ? "Last clock-out: ".concat(new Date(lastClockOut).toLocaleString()) : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
     var lastClockInString = recentShifts ? (lastClockIn ? "Last clock-in: ".concat(new Date(lastClockIn).toLocaleString()) : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
-    var hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, clockIn ? "clockIn" : "clockOut", !clockIn); //parent function only called on clocking in or out, not status or stat checks
+    var hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, !clockIn); //parent function only called on clocking in or out, not status or stat checks
     var hoursThisWeek = getHoursForWeekContainingDate();
     var hoursLastWeek = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7));
     var _a = getFourAndEightWeekAverageHours(), fourWeekAverage = _a.fourWeekAverage, eightWeekAverage = _a.eightWeekAverage;
@@ -206,7 +225,8 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
             console.log(lastClockOutString);
             logDivider();
         }
-        console.log("Worked ".concat(getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours), " hours today in ").concat(hoursAndShiftsToday.totalShifts, " shifts"));
+        console.log("Hours today: ".concat(getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)));
+        console.log("Shifts today: ".concat(hoursAndShiftsToday.totalShifts));
         console.log("Hours this week: ".concat(getHoursAndMinutesFromDecimalHours(hoursThisWeek)));
         console.log("Hours last week: ".concat(getHoursAndMinutesFromDecimalHours(hoursLastWeek)));
         logDivider();
@@ -259,20 +279,14 @@ var getMostRecentShiftsInfo = function (currentMonthLog, pastMonthLog) {
     var secondLastShift = allShiftsArray.length > 1 ? allShiftsArray[allShiftsArray.length - 2] : undefined;
     return { lastShift: lastShift, secondLastShift: secondLastShift };
 };
-var getHoursAndShiftsWorkedForDay = function (clockTime, typeOfCheck, clockedIn) {
+var getHoursAndShiftsWorkedForDay = function (clockTime, clockedIn) {
     var clockTimeComponents = getTimeComponents(clockTime);
     var currentMonthLog = getMonthLogSafe(clockTimeComponents.calendarMonth, clockTimeComponents.year);
     var todayShifts = currentMonthLog[clockTimeComponents.date] || [];
     var totalHours = todayShifts.reduce(function (cumHours, shift, shiftIndex, shiftArray) {
         //check for scenarios where the most recent shift shouldn't have a clock-out, then add a value when last shift is reached
         if (clockedIn && (shiftIndex === shiftArray.length - 1)) {
-            var timeToUse = void 0;
-            if (typeOfCheck === "clockOut") {
-                timeToUse = clockTime.getTime();
-            }
-            else if (typeOfCheck === "check") {
-                timeToUse = clockTimeComponents.ms;
-            }
+            var timeToUse = clockTimeComponents.ms;
             return cumHours + ((timeToUse - shift[0]) / 3600000);
         }
         else {
@@ -398,4 +412,22 @@ var getTimeComponents = function (dateObject) {
         timeString: dateObject.toLocaleString(),
         ms: dateObject.getTime()
     };
+};
+/**
+ * Used to filter shifts to get an array of shifts with missed clock-in/clock-out
+ * @param allShifts array of allShifts from current and previous month logs
+ * @returns filtered array of same type with only invalid shifts
+ */
+var getInvalidShifts = function (allShifts) {
+    var invalidShifts = allShifts.filter(function (shift, index) {
+        if (index !== allShifts.length - 1) {
+            // if not at last index, any null value means missed clock/invalid shift
+            return !shift[0] || !shift[1];
+        }
+        else {
+            // if at last index, null value for clock-in means missed clock/invalid shift
+            return !shift[0];
+        }
+    });
+    return invalidShifts;
 };
