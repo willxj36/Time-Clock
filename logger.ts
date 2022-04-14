@@ -1,10 +1,8 @@
 import Chalk from "chalk"
 
-
-
 export const log = {
     info: console.log,
-    muted: (...args: any) => console.log(Chalk.dim(...args)),
+    muted: (...args: any) => console.log(Chalk.gray(...args)),
     error: (...args: any) => console.log(Chalk.redBright(...args)),
     alert: (...args: any) => console.log(Chalk.yellowBright(...args)),
     emerg: (...args: any) => console.log(Chalk.bgRedBright(...args)),
@@ -17,9 +15,9 @@ export const logDivider = () => {
 
 export const logColors = {
     info: Chalk.white,
-    error: Chalk.red,
+    error: Chalk.redBright,
     muted: Chalk.dim,
-    alert: Chalk.yellow,
+    alert: Chalk.yellowBright,
     emerg: Chalk.bgRedBright,
-    success: Chalk.green
+    success: Chalk.bgGreen
 }

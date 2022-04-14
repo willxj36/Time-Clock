@@ -7,7 +7,7 @@ exports.logColors = exports.logDivider = exports.log = void 0;
 const chalk_1 = __importDefault(require("chalk"));
 exports.log = {
     info: console.log,
-    muted: (...args) => console.log(chalk_1.default.dim(...args)),
+    muted: (...args) => console.log(chalk_1.default.gray(...args)),
     error: (...args) => console.log(chalk_1.default.redBright(...args)),
     alert: (...args) => console.log(chalk_1.default.yellowBright(...args)),
     emerg: (...args) => console.log(chalk_1.default.bgRedBright(...args)),
@@ -19,9 +19,9 @@ const logDivider = () => {
 exports.logDivider = logDivider;
 exports.logColors = {
     info: chalk_1.default.white,
-    error: chalk_1.default.red,
+    error: chalk_1.default.redBright,
     muted: chalk_1.default.dim,
-    alert: chalk_1.default.yellow,
+    alert: chalk_1.default.yellowBright,
     emerg: chalk_1.default.bgRedBright,
-    success: chalk_1.default.green
+    success: chalk_1.default.bgGreen
 };

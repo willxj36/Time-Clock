@@ -205,8 +205,8 @@ const getNeededInfoForClocking = (clockTime, clockIn) => {
     console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct");
     const lastClockOut = determineLastClockOut(recentShifts, clockIn);
     const lastClockIn = determineLastClockIn(recentShifts);
-    const lastClockOutString = recentShifts ? (lastClockOut ? `Last clock-out: ${new Date(lastClockOut).toLocaleString()}` : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
-    const lastClockInString = recentShifts ? (lastClockIn ? `Last clock-in: ${new Date(lastClockIn).toLocaleString()}` : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
+    const lastClockOutString = recentShifts ? (lastClockOut ? `Last clock-out: ${new Date(lastClockOut).toLocaleString()}` : logger_1.logColors.error("Missed clock-out! Use clock-out with manual date as parameter to fix")) : "No previous shifts found for current and previous months";
+    const lastClockInString = recentShifts ? (lastClockIn ? `Last clock-in: ${new Date(lastClockIn).toLocaleString()}` : logger_1.logColors.error("Missing clock-in! Use clock-in with manual date as parameter to fix")) : "No previous shifts found for current and previous months";
     const hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, !clockIn); //parent function only called on clocking in or out, not status or stat checks
     const hoursThisWeek = getHoursForWeekContainingDate();
     const hoursLastWeek = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7));
