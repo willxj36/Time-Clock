@@ -1,5 +1,6 @@
-const fs = require("fs")
+import { log, logDivider, logColors } from "./logger"
 import * as Interfaces from "./interfaces"
+const fs = require("fs")
 const config = require("./config.json")
 
 //TODO: add status and stats functions
@@ -8,9 +9,6 @@ const config = require("./config.json")
 
 /////// - FUNCTIONS CALLED BY TERMINAL - ///////
 
-/**
- * clockInTime should be in ms as string
- */
 module.exports.clockIn = function (clockInTime: Interfaces.ManualTime) {
 	const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockInTime, true)
 
@@ -32,7 +30,6 @@ module.exports.clockIn = function (clockInTime: Interfaces.ManualTime) {
 module.exports.clockOut = function (clockOutTime: Interfaces.ManualTime) {
 	const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockOutTime, false)
 
-	//can't abstract into variables since we're writing directly to object here
 	const dateShiftArray = currentMonthLog[timeComponents.date]
 	if(!!dateShiftArray) {
 		//make sure latest shift doesn't already have a clock-out
@@ -47,22 +44,23 @@ module.exports.clockOut = function (clockOutTime: Interfaces.ManualTime) {
 		if(!!yesterdayShiftArray) {
 			//check for a clock-out of yesterday's last shift, if none, assume this shift extends yesterday's unless time seems too long
 			if(yesterdayShiftArray[yesterdayShiftArray.length - 1][1] === null) {
-				const hoursSinceYesterdayClockIn = (timeComponents.ms - yesterdayShiftArray[yesterdayShiftArray.length - 1][0])/3600000
+				// if the shift exists, but clock out is null, there must be a clock in
+				const hoursSinceYesterdayClockIn = (timeComponents.ms - yesterdayShiftArray[yesterdayShiftArray.length - 1][0]!)/3600000
 				if(hoursSinceYesterdayClockIn > 8) {
 					currentMonthLog[timeComponents.date] = [ [ null, timeComponents.ms ] ]
-					console.log("No corresponding clock-in today, last clock-in over 8 hours ago. Most likely a clock-out AND clock-in was missed. This clock-out will be written to a new shift. Use clock-in with ms time as parameter and clock-out with ms time as parameter to correct(set both clock-in and clock-out to midnight between current shifts if this is supposed to be one long shift).")
+					log.alert("No corresponding clock-in today, last clock-in over 8 hours ago. Most likely a clock-out AND clock-in was missed. This clock-out will be written to a new shift. Use clock-in with manual time as parameter and clock-out with manual time as parameter to correct(set both clock-in and clock-out to midnight between current shifts if this is supposed to be one long shift).")
 				} else {
 					currentMonthLog[timeComponents.date - 1][currentMonthLog[timeComponents.date - 1].length - 1][1] = timeComponents.ms
 				}
 			} else {
 				//indicates shifts exist for yesterday, but last one already has a clockout
 				currentMonthLog[timeComponents.date] = [ [ null, timeComponents.ms ] ]
-				console.log("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in")
+				log.alert("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in")
 			}
 		} else {
 			//if no clock-in today and no shifts yesterday at all, assume missed clock-in, log this clock-out, give warning to manually fix
 			currentMonthLog[timeComponents.date] = [ [ null, timeComponents.ms ] ]
-			console.log("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in")
+			log.alert("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in")
 		}
 	}
 	//write to log file when calculations are finished, but wait to write console.logs (hence use of sync)
@@ -80,29 +78,29 @@ module.exports.getStatus = function() {
 
 	const mostRecentShift = allShiftsArray[allShiftsArray.length - 1] || null
 	if(!mostRecentShift) {
-		console.log("No shifts found in logs")
+		log.alert("No shifts found in logs")
 	} else {
 		const invalidShifts = getInvalidShifts(allShiftsArray)
 		let clockedIn: boolean
 		if(mostRecentShift[0] && !mostRecentShift[1]) {
 			clockedIn = true
-			console.log(`Currently clocked in since ${new Date(mostRecentShift[0]).toLocaleString()}`)
+			log.success(`Currently clocked in since ${new Date(mostRecentShift[0]).toLocaleString()}`)
 		} else {
 			clockedIn = false
-			console.log(`Currently clocked out since ${new Date(mostRecentShift[1]).toLocaleString()}`)
+			log.alert(`Currently clocked out since ${new Date(mostRecentShift[1]!).toLocaleString()}`)
 		}
 		logDivider()
 		const { totalHours, totalShifts } = getHoursAndShiftsWorkedForDay(currentDateObject, clockedIn)
-		console.log(`Today's hours: ${getHoursAndMinutesFromDecimalHours(totalHours)}`)
-		console.log(`Today's shifts: ${totalShifts}`)
+		log.info(`Today's hours: ${getHoursAndMinutesFromDecimalHours(totalHours)}`)
+		log.info(`Today's shifts: ${totalShifts}`)
 		logDivider()
-		console.log(`${invalidShifts.length || "No"} invalid shift${invalidShifts.length !== 1 ? "s": ""} in current month and last month logs`)
+		log.success(`${invalidShifts.length || "No"} invalid shift${invalidShifts.length !== 1 ? "s": ""} in current month and last month logs`)
 		if(invalidShifts.length) {
-			console.log("Invalid shifts:")
+			log.error("Invalid shifts:")
 			invalidShifts.forEach(shift => {
 				const startTimeComponents = !!shift[0] ? getTimeComponents(new Date(shift[0])) : null
 				const endTimeComponents = !!shift[1] ? getTimeComponents(new Date(shift[1])) : null
-				console.log(`IN: ${startTimeComponents ? startTimeComponents.timeString : "MISSING"}     |     OUT: ${endTimeComponents ? endTimeComponents.timeString : "MISSING"}`)
+				log.info(`IN: ${startTimeComponents ? startTimeComponents.timeString : logColors.error("MISSING")}     |     OUT: ${endTimeComponents ? endTimeComponents.timeString : logColors.error("MISSING")}`)
 			})
 		}
 	}
@@ -141,10 +139,6 @@ const getHoursAndMinutesFromDecimalHours = (hoursDecimal: number) => {
 	return `${hours}h${minutes}m`
 }
 
-const logDivider = () => {
-	return console.log("- - - - - - - - - - - -")
-}
-
 /////// - FILE OPERATIONS - ////////
 
 /**
@@ -167,14 +161,14 @@ const getMonthLogSafe = (calendarMonth: number, year: number): Interfaces.MonthL
  * Used to get previous month specifically, as it will use time components to determine if prior year needs to be used, and return undefined if there is no log instead of an empty object
  * @param timeComponents 
  */
-const getPreviousMonthLogSafe = (timeComponents: Interfaces.TimeComponents): Interfaces.MonthLog | undefined => {
+const getPreviousMonthLogSafe = (timeComponents: Interfaces.TimeComponents): Interfaces.MonthLog | null => {
 	const yearForPreviousMonth = timeComponents.calendarMonth === 1 ? timeComponents.year - 1 : timeComponents.year
 	const filePath = monthFileFormatAndPath(timeComponents.calendarMonth - 1, yearForPreviousMonth)
 	const fileExists = fs.existsSync(filePath)
 	if(fileExists) {
 		return JSON.parse(fs.readFileSync(filePath, {encoding: "utf-8"}))
 	} else {
-		return undefined
+		return null
 	}
 }
 
@@ -214,7 +208,7 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 
 	const currentMonthLog: Interfaces.MonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year)
 	const pastMonthLog = getPreviousMonthLogSafe(timeComponents)
-	const recentShifts: Interfaces.RecentShifts = getMostRecentShiftsInfo(currentMonthLog, pastMonthLog)
+	const recentShifts: Interfaces.RecentShifts | null = getMostRecentShiftsInfo(currentMonthLog, pastMonthLog)
 	//shifts only exist after a successful clock-in is written, so lastShift[0] should never have a falsy value
 	console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct")
 	const lastClockOut = determineLastClockOut(recentShifts, clockIn)
@@ -228,20 +222,20 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 	const { fourWeekAverageDays, eightWeekAverageDays } = getFourAndEightWeekAverageDays()
 
 	const callLogs = () => {
-		console.log(`Successfully clocked ${clockIn ? "in" : "out"} at ${timeComponents.timeString}`)
+		log.success(`Successfully clocked ${clockIn ? "in" : "out"} at ${timeComponents.timeString}`)
 		logDivider()
 		if(recentShifts) {
-			console.log(lastClockInString)
-			console.log(lastClockOutString)
+			log.info(lastClockInString)
+			log.info(lastClockOutString)
 			logDivider()
 		}
-		console.log(`Hours today: ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)}`)
-		console.log(`Shifts today: ${hoursAndShiftsToday.totalShifts}`)
-		console.log(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`)
-		console.log(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`)
+		log.muted(`Hours today: ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)}`)
+		log.muted(`Shifts today: ${hoursAndShiftsToday.totalShifts}`)
+		log.muted(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`)
+		log.muted(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`)
 		logDivider()
-		console.log(`4 week average hours: ${getHoursAndMinutesFromDecimalHours(fourWeekAverage)}; days: ${fourWeekAverageDays}`)
-		console.log(`8 week average hours: ${getHoursAndMinutesFromDecimalHours(eightWeekAverage)}; days; ${eightWeekAverageDays}`)
+		log.muted(`4 week average hours: ${getHoursAndMinutesFromDecimalHours(fourWeekAverage)}; days: ${fourWeekAverageDays}`)
+		log.muted(`8 week average hours: ${getHoursAndMinutesFromDecimalHours(eightWeekAverage)}; days; ${eightWeekAverageDays}`)
 	}
 
 	return {
@@ -252,30 +246,30 @@ const getNeededInfoForClocking = (clockTime: Interfaces.ManualTime, clockIn: boo
 	}
 }
 
-const determineLastClockIn = (recentShifts: Interfaces.RecentShifts) => {
+const determineLastClockIn = (recentShifts: Interfaces.RecentShifts | null) => {
 	// new clock is not saved until after this function is called, so this will always be the clock-in time of the most recent saved shift
 	return recentShifts?.lastShift[0]
 }
 
-const determineLastClockOut = (recentShifts: Interfaces.RecentShifts, clockIn: boolean) => {
+const determineLastClockOut = (recentShifts: Interfaces.RecentShifts | null, clockIn: boolean) => {
 	if(clockIn) {
 		return recentShifts?.lastShift[1]
 	} else {
-		return recentShifts?.secondLastShift[1]
+		return recentShifts?.secondLastShift ? recentShifts?.secondLastShift[1] : undefined
 	}
 }
 
-const getAllShiftsForCurrentAndLastMonth = (currentMonthLog: Interfaces.MonthLog, pastMonthLog: Interfaces.MonthLog) => {
+const getAllShiftsForCurrentAndLastMonth = (currentMonthLog: Interfaces.MonthLog | null, pastMonthLog: Interfaces.MonthLog | null) => {
 	const allShiftsArray: Interfaces.Shift[] = []
 	if(pastMonthLog) {
-		Object.values(pastMonthLog).forEach(shiftArray => {
+		Object.values(pastMonthLog).forEach((shiftArray: Interfaces.Shift[]) => {
 			shiftArray.forEach(shift => {
 				allShiftsArray.push(shift)
 			})
 		})
 	}
 	if(currentMonthLog) {
-		Object.values(currentMonthLog).forEach(shiftArray => {
+		Object.values(currentMonthLog).forEach((shiftArray: Interfaces.Shift[]) => {
 			shiftArray.forEach(shift => {
 				allShiftsArray.push(shift)
 			})
@@ -285,15 +279,15 @@ const getAllShiftsForCurrentAndLastMonth = (currentMonthLog: Interfaces.MonthLog
 	return allShiftsArray
 }
 
-const getMostRecentShiftsInfo = (currentMonthLog: Interfaces.MonthLog, pastMonthLog: Interfaces.MonthLog): Interfaces.RecentShifts | undefined => {
+const getMostRecentShiftsInfo = (currentMonthLog: Interfaces.MonthLog | null, pastMonthLog: Interfaces.MonthLog | null): Interfaces.RecentShifts | null => {
 	const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog)
 
 	if(!allShiftsArray.length) {
-		return undefined
+		return null
 	}
 
 	const lastShift = allShiftsArray[allShiftsArray.length - 1]
-	const secondLastShift = allShiftsArray.length > 1 ? allShiftsArray[allShiftsArray.length - 2] : undefined
+	const secondLastShift = allShiftsArray.length > 1 ? allShiftsArray[allShiftsArray.length - 2] : null
 
 	return { lastShift, secondLastShift }
 }
@@ -306,7 +300,7 @@ const getHoursAndShiftsWorkedForDay = (clockTime: Date, clockedIn: boolean): Int
 		//check for scenarios where the most recent shift shouldn't have a clock-out, then add a value when last shift is reached
 		if(clockedIn && (shiftIndex === shiftArray.length - 1)) {
 			const timeToUse = clockTimeComponents.ms
-			return cumHours + ((timeToUse - shift[0])/3600000)
+			return cumHours + ((timeToUse - shift[0]!)/3600000)
 		} else {
 			//if any shift but last has a missing clock, don't add any time. A log should already have been thrown for the missed clocks.
 			if(!shift[0] || !shift[1]) {
@@ -336,10 +330,10 @@ const getHoursForWeekContainingDate = (passedDate?: Date) => {
 			hoursForDate = 0
 		} else {
 			hoursForDate = shiftArrayForDate.reduce((cumHours, shift) => {
-				if(shift[1]) {
+				if(shift[1] && shift[0]) {
 					return cumHours + ((shift[1] - shift[0])/3600000)
 				} else {
-					if(!passedDate) {
+					if(!passedDate && shift[0]) {
 						//indicates most likely currently clocked in - use current time
 						return cumHours + ((dateComponents.ms - shift[0])/3600000)
 					} else {
@@ -386,7 +380,7 @@ const determineDatesToGetForAWeek = (passedDate: Date | undefined) => {
 		//the same date will never appear in one week
 		datesToGet.push([ date.getMonth() + 1, date.getDate() ])
 	}
-	const monthLogs = {}
+	const monthLogs: {[month: number]: Interfaces.MonthLog} = {}
 	monthsToGet.forEach(month => {
 		monthLogs[month] = getMonthLogSafe(month, dateComponents.year)
 	})

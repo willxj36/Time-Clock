@@ -1,16 +1,14 @@
 "use strict";
-exports.__esModule = true;
-var fs = require("fs");
-var config = require("./config.json");
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = require("./logger");
+const fs = require("fs");
+const config = require("./config.json");
 //TODO: add status and stats functions
 //TODO: handle manual clock times better (what if manual time is after current time?; how to place in a shift that isn't the most recent)
 //TODO: handle shifts that stretch over midnight for the logging
 /////// - FUNCTIONS CALLED BY TERMINAL - ///////
-/**
- * clockInTime should be in ms as string
- */
 module.exports.clockIn = function (clockInTime) {
-    var _a = getNeededInfoForClocking(clockInTime, true), timeComponents = _a.timeComponents, currentMonthLog = _a.currentMonthLog, callLogs = _a.callLogs;
+    const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockInTime, true);
     if (!!currentMonthLog[timeComponents.date]) {
         currentMonthLog[timeComponents.date].push([timeComponents.ms, null]);
     }
@@ -27,9 +25,8 @@ module.exports.clockIn = function (clockInTime) {
     }
 };
 module.exports.clockOut = function (clockOutTime) {
-    var _a = getNeededInfoForClocking(clockOutTime, false), timeComponents = _a.timeComponents, currentMonthLog = _a.currentMonthLog, callLogs = _a.callLogs;
-    //can't abstract into variables since we're writing directly to object here
-    var dateShiftArray = currentMonthLog[timeComponents.date];
+    const { timeComponents, currentMonthLog, callLogs } = getNeededInfoForClocking(clockOutTime, false);
+    const dateShiftArray = currentMonthLog[timeComponents.date];
     if (!!dateShiftArray) {
         //make sure latest shift doesn't already have a clock-out
         if (!dateShiftArray[dateShiftArray.length - 1][1]) {
@@ -41,14 +38,15 @@ module.exports.clockOut = function (clockOutTime) {
     }
     else {
         //if no clock-in today, make sure this isn't an extension of yesterday's shift
-        var yesterdayShiftArray = currentMonthLog[timeComponents.date - 1];
+        const yesterdayShiftArray = currentMonthLog[timeComponents.date - 1];
         if (!!yesterdayShiftArray) {
             //check for a clock-out of yesterday's last shift, if none, assume this shift extends yesterday's unless time seems too long
             if (yesterdayShiftArray[yesterdayShiftArray.length - 1][1] === null) {
-                var hoursSinceYesterdayClockIn = (timeComponents.ms - yesterdayShiftArray[yesterdayShiftArray.length - 1][0]) / 3600000;
+                // if the shift exists, but clock out is null, there must be a clock in
+                const hoursSinceYesterdayClockIn = (timeComponents.ms - yesterdayShiftArray[yesterdayShiftArray.length - 1][0]) / 3600000;
                 if (hoursSinceYesterdayClockIn > 8) {
                     currentMonthLog[timeComponents.date] = [[null, timeComponents.ms]];
-                    console.log("No corresponding clock-in today, last clock-in over 8 hours ago. Most likely a clock-out AND clock-in was missed. This clock-out will be written to a new shift. Use clock-in with ms time as parameter and clock-out with ms time as parameter to correct(set both clock-in and clock-out to midnight between current shifts if this is supposed to be one long shift).");
+                    logger_1.log.alert("No corresponding clock-in today, last clock-in over 8 hours ago. Most likely a clock-out AND clock-in was missed. This clock-out will be written to a new shift. Use clock-in with manual time as parameter and clock-out with manual time as parameter to correct(set both clock-in and clock-out to midnight between current shifts if this is supposed to be one long shift).");
                 }
                 else {
                     currentMonthLog[timeComponents.date - 1][currentMonthLog[timeComponents.date - 1].length - 1][1] = timeComponents.ms;
@@ -57,13 +55,13 @@ module.exports.clockOut = function (clockOutTime) {
             else {
                 //indicates shifts exist for yesterday, but last one already has a clockout
                 currentMonthLog[timeComponents.date] = [[null, timeComponents.ms]];
-                console.log("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in");
+                logger_1.log.alert("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in");
             }
         }
         else {
             //if no clock-in today and no shifts yesterday at all, assume missed clock-in, log this clock-out, give warning to manually fix
             currentMonthLog[timeComponents.date] = [[null, timeComponents.ms]];
-            console.log("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in");
+            logger_1.log.alert("Warning! No corresponding clock-in found, use clock-in with ms time as parameter to add missed clock-in");
         }
     }
     //write to log file when calculations are finished, but wait to write console.logs (hence use of sync)
@@ -71,38 +69,38 @@ module.exports.clockOut = function (clockOutTime) {
     callLogs();
 };
 module.exports.getStatus = function () {
-    var currentDateObject = new Date();
-    var timeComponents = getTimeComponents(currentDateObject);
-    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
-    var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
-    var allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
-    var mostRecentShift = allShiftsArray[allShiftsArray.length - 1] || null;
+    const currentDateObject = new Date();
+    const timeComponents = getTimeComponents(currentDateObject);
+    const currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
+    const pastMonthLog = getPreviousMonthLogSafe(timeComponents);
+    const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
+    const mostRecentShift = allShiftsArray[allShiftsArray.length - 1] || null;
     if (!mostRecentShift) {
-        console.log("No shifts found in logs");
+        logger_1.log.alert("No shifts found in logs");
     }
     else {
-        var invalidShifts = getInvalidShifts(allShiftsArray);
-        var clockedIn = void 0;
+        const invalidShifts = getInvalidShifts(allShiftsArray);
+        let clockedIn;
         if (mostRecentShift[0] && !mostRecentShift[1]) {
             clockedIn = true;
-            console.log("Currently clocked in since ".concat(new Date(mostRecentShift[0]).toLocaleString()));
+            logger_1.log.success(`Currently clocked in since ${new Date(mostRecentShift[0]).toLocaleString()}`);
         }
         else {
             clockedIn = false;
-            console.log("Currently clocked out since ".concat(new Date(mostRecentShift[1]).toLocaleString()));
+            logger_1.log.alert(`Currently clocked out since ${new Date(mostRecentShift[1]).toLocaleString()}`);
         }
-        logDivider();
-        var _a = getHoursAndShiftsWorkedForDay(currentDateObject, clockedIn), totalHours = _a.totalHours, totalShifts = _a.totalShifts;
-        console.log("Today's hours: ".concat(getHoursAndMinutesFromDecimalHours(totalHours)));
-        console.log("Today's shifts: ".concat(totalShifts));
-        logDivider();
-        console.log("".concat(invalidShifts.length || "No", " invalid shift").concat(invalidShifts.length !== 1 ? "s" : "", " in current month and last month logs"));
+        (0, logger_1.logDivider)();
+        const { totalHours, totalShifts } = getHoursAndShiftsWorkedForDay(currentDateObject, clockedIn);
+        logger_1.log.info(`Today's hours: ${getHoursAndMinutesFromDecimalHours(totalHours)}`);
+        logger_1.log.info(`Today's shifts: ${totalShifts}`);
+        (0, logger_1.logDivider)();
+        logger_1.log.success(`${invalidShifts.length || "No"} invalid shift${invalidShifts.length !== 1 ? "s" : ""} in current month and last month logs`);
         if (invalidShifts.length) {
-            console.log("Invalid shifts:");
-            invalidShifts.forEach(function (shift) {
-                var startTimeComponents = !!shift[0] ? getTimeComponents(new Date(shift[0])) : null;
-                var endTimeComponents = !!shift[1] ? getTimeComponents(new Date(shift[1])) : null;
-                console.log("IN: ".concat(startTimeComponents ? startTimeComponents.timeString : "MISSING", "     |     OUT: ").concat(endTimeComponents ? endTimeComponents.timeString : "MISSING"));
+            logger_1.log.error("Invalid shifts:");
+            invalidShifts.forEach(shift => {
+                const startTimeComponents = !!shift[0] ? getTimeComponents(new Date(shift[0])) : null;
+                const endTimeComponents = !!shift[1] ? getTimeComponents(new Date(shift[1])) : null;
+                logger_1.log.info(`IN: ${startTimeComponents ? startTimeComponents.timeString : logger_1.logColors.error("MISSING")}     |     OUT: ${endTimeComponents ? endTimeComponents.timeString : logger_1.logColors.error("MISSING")}`);
             });
         }
     }
@@ -120,24 +118,21 @@ module.exports.getStatus = function () {
  * @param year
  * @returns proper file format
  */
-var monthFileFormatAndPath = function (calendarMonth, year) {
-    var monthToUse = calendarMonth;
-    var yearToUse = year;
+const monthFileFormatAndPath = (calendarMonth, year) => {
+    let monthToUse = calendarMonth;
+    let yearToUse = year;
     if (calendarMonth <= 0) {
         monthToUse = (12 - calendarMonth);
         yearToUse = year - 1;
     }
-    return "".concat(config.rootPath, "/logs/Log-").concat(monthToUse, "_").concat(yearToUse);
+    return `${config.rootPath}/logs/Log-${monthToUse}_${yearToUse}`;
 };
-var getHoursAndMinutesFromDecimalHours = function (hoursDecimal) {
+const getHoursAndMinutesFromDecimalHours = (hoursDecimal) => {
     //hours should never be negative, so this shouldn't cause any issues
-    var hours = Math.floor(hoursDecimal);
+    const hours = Math.floor(hoursDecimal);
     //always rounds up, acceptable for the intended use of this program
-    var minutes = Math.ceil((hoursDecimal - hours) * 60);
-    return "".concat(hours, "h").concat(minutes, "m");
-};
-var logDivider = function () {
-    return console.log("- - - - - - - - - - - -");
+    const minutes = Math.ceil((hoursDecimal - hours) * 60);
+    return `${hours}h${minutes}m`;
 };
 /////// - FILE OPERATIONS - ////////
 /**
@@ -146,9 +141,9 @@ var logDivider = function () {
  * @param year
  * @returns JSON object of current month log
  */
-var getMonthLogSafe = function (calendarMonth, year) {
-    var filePath = monthFileFormatAndPath(calendarMonth, year);
-    var fileExists = fs.existsSync(filePath);
+const getMonthLogSafe = (calendarMonth, year) => {
+    const filePath = monthFileFormatAndPath(calendarMonth, year);
+    const fileExists = fs.existsSync(filePath);
     if (fileExists) {
         return JSON.parse(fs.readFileSync(filePath, { encoding: "utf-8" }));
     }
@@ -160,40 +155,40 @@ var getMonthLogSafe = function (calendarMonth, year) {
  * Used to get previous month specifically, as it will use time components to determine if prior year needs to be used, and return undefined if there is no log instead of an empty object
  * @param timeComponents
  */
-var getPreviousMonthLogSafe = function (timeComponents) {
-    var yearForPreviousMonth = timeComponents.calendarMonth === 1 ? timeComponents.year - 1 : timeComponents.year;
-    var filePath = monthFileFormatAndPath(timeComponents.calendarMonth - 1, yearForPreviousMonth);
-    var fileExists = fs.existsSync(filePath);
+const getPreviousMonthLogSafe = (timeComponents) => {
+    const yearForPreviousMonth = timeComponents.calendarMonth === 1 ? timeComponents.year - 1 : timeComponents.year;
+    const filePath = monthFileFormatAndPath(timeComponents.calendarMonth - 1, yearForPreviousMonth);
+    const fileExists = fs.existsSync(filePath);
     if (fileExists) {
         return JSON.parse(fs.readFileSync(filePath, { encoding: "utf-8" }));
     }
     else {
-        return undefined;
+        return null;
     }
 };
-var writeMonthLog = function (month, year, data) {
+const writeMonthLog = (month, year, data) => {
     fs.writeFileSync(monthFileFormatAndPath(month, year), JSON.stringify(data), { encoding: "utf-8" });
 };
 /////// - GETTING INFO FROM INPUT INFORMATION - ///////
-var getNeededInfoForClocking = function (clockTime, clockIn) {
-    var validManualTime = true;
+const getNeededInfoForClocking = (clockTime, clockIn) => {
+    let validManualTime = true;
     //terminal may hand in an array shorter than 5, so need to hardcode expected length as shorter arrays are not valid
-    for (var i = 0; i < 5; i++) {
+    for (let i = 0; i < 5; i++) {
         if (clockTime[i] == undefined) {
             validManualTime = false;
             if (i > 0) {
-                throw new Error("Received ".concat(i, " arguments, 5 arguments are required (yr, mo, date, hr, min) for manual time, or no arguments for current system time. Please try again."));
+                throw new Error(`Received ${i} arguments, 5 arguments are required (yr, mo, date, hr, min) for manual time, or no arguments for current system time. Please try again.`);
             }
             break;
         }
     }
-    var timeToUse;
+    let timeToUse;
     if (!validManualTime) {
         timeToUse = new Date();
     }
     else {
-        var numberClockTime = [];
-        for (var i = 0; i < clockTime.length; i++) {
+        const numberClockTime = [];
+        for (let i = 0; i < clockTime.length; i++) {
             numberClockTime.push(parseInt(clockTime[i]));
         }
         //time is entered with number for calendar month for user-friendliness, but this has to be changed to get the right date object
@@ -202,91 +197,91 @@ var getNeededInfoForClocking = function (clockTime, clockIn) {
             throw new Error("Future clock times not allowed");
         }
     }
-    var timeComponents = getTimeComponents(timeToUse);
-    var currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
-    var pastMonthLog = getPreviousMonthLogSafe(timeComponents);
-    var recentShifts = getMostRecentShiftsInfo(currentMonthLog, pastMonthLog);
+    const timeComponents = getTimeComponents(timeToUse);
+    const currentMonthLog = getMonthLogSafe(timeComponents.calendarMonth, timeComponents.year);
+    const pastMonthLog = getPreviousMonthLogSafe(timeComponents);
+    const recentShifts = getMostRecentShiftsInfo(currentMonthLog, pastMonthLog);
     //shifts only exist after a successful clock-in is written, so lastShift[0] should never have a falsy value
     console.assert(recentShifts ? !!recentShifts.lastShift[0] : true, "Last clock-in null or undefined, manually edit logs to correct");
-    var lastClockOut = determineLastClockOut(recentShifts, clockIn);
-    var lastClockIn = determineLastClockIn(recentShifts);
-    var lastClockOutString = recentShifts ? (lastClockOut ? "Last clock-out: ".concat(new Date(lastClockOut).toLocaleString()) : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
-    var lastClockInString = recentShifts ? (lastClockIn ? "Last clock-in: ".concat(new Date(lastClockIn).toLocaleString()) : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
-    var hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, !clockIn); //parent function only called on clocking in or out, not status or stat checks
-    var hoursThisWeek = getHoursForWeekContainingDate();
-    var hoursLastWeek = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7));
-    var _a = getFourAndEightWeekAverageHours(), fourWeekAverage = _a.fourWeekAverage, eightWeekAverage = _a.eightWeekAverage;
-    var _b = getFourAndEightWeekAverageDays(), fourWeekAverageDays = _b.fourWeekAverageDays, eightWeekAverageDays = _b.eightWeekAverageDays;
-    var callLogs = function () {
-        console.log("Successfully clocked ".concat(clockIn ? "in" : "out", " at ").concat(timeComponents.timeString));
-        logDivider();
+    const lastClockOut = determineLastClockOut(recentShifts, clockIn);
+    const lastClockIn = determineLastClockIn(recentShifts);
+    const lastClockOutString = recentShifts ? (lastClockOut ? `Last clock-out: ${new Date(lastClockOut).toLocaleString()}` : "Missed clock-out! Use clock-out with ms time as parameter to fix") : "No previous shifts found for current and previous months";
+    const lastClockInString = recentShifts ? (lastClockIn ? `Last clock-in: ${new Date(lastClockIn).toLocaleString()}` : "Missing clock-in! Use clock-in with ms time as parameter to fix") : "No previous shifts found for current and previous months";
+    const hoursAndShiftsToday = getHoursAndShiftsWorkedForDay(timeToUse, !clockIn); //parent function only called on clocking in or out, not status or stat checks
+    const hoursThisWeek = getHoursForWeekContainingDate();
+    const hoursLastWeek = getHoursForWeekContainingDate(new Date(timeComponents.year, timeComponents.calendarMonth - 1, timeComponents.date - 7));
+    const { fourWeekAverage, eightWeekAverage } = getFourAndEightWeekAverageHours();
+    const { fourWeekAverageDays, eightWeekAverageDays } = getFourAndEightWeekAverageDays();
+    const callLogs = () => {
+        logger_1.log.success(`Successfully clocked ${clockIn ? "in" : "out"} at ${timeComponents.timeString}`);
+        (0, logger_1.logDivider)();
         if (recentShifts) {
-            console.log(lastClockInString);
-            console.log(lastClockOutString);
-            logDivider();
+            logger_1.log.info(lastClockInString);
+            logger_1.log.info(lastClockOutString);
+            (0, logger_1.logDivider)();
         }
-        console.log("Hours today: ".concat(getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)));
-        console.log("Shifts today: ".concat(hoursAndShiftsToday.totalShifts));
-        console.log("Hours this week: ".concat(getHoursAndMinutesFromDecimalHours(hoursThisWeek)));
-        console.log("Hours last week: ".concat(getHoursAndMinutesFromDecimalHours(hoursLastWeek)));
-        logDivider();
-        console.log("4 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(fourWeekAverage), "; days: ").concat(fourWeekAverageDays));
-        console.log("8 week average hours: ".concat(getHoursAndMinutesFromDecimalHours(eightWeekAverage), "; days; ").concat(eightWeekAverageDays));
+        logger_1.log.muted(`Hours today: ${getHoursAndMinutesFromDecimalHours(hoursAndShiftsToday.totalHours)}`);
+        logger_1.log.muted(`Shifts today: ${hoursAndShiftsToday.totalShifts}`);
+        logger_1.log.muted(`Hours this week: ${getHoursAndMinutesFromDecimalHours(hoursThisWeek)}`);
+        logger_1.log.muted(`Hours last week: ${getHoursAndMinutesFromDecimalHours(hoursLastWeek)}`);
+        (0, logger_1.logDivider)();
+        logger_1.log.muted(`4 week average hours: ${getHoursAndMinutesFromDecimalHours(fourWeekAverage)}; days: ${fourWeekAverageDays}`);
+        logger_1.log.muted(`8 week average hours: ${getHoursAndMinutesFromDecimalHours(eightWeekAverage)}; days; ${eightWeekAverageDays}`);
     };
     return {
-        timeComponents: timeComponents,
-        currentMonthLog: currentMonthLog,
-        pastMonthLog: pastMonthLog,
-        callLogs: callLogs
+        timeComponents,
+        currentMonthLog,
+        pastMonthLog,
+        callLogs
     };
 };
-var determineLastClockIn = function (recentShifts) {
+const determineLastClockIn = (recentShifts) => {
     // new clock is not saved until after this function is called, so this will always be the clock-in time of the most recent saved shift
     return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.lastShift[0];
 };
-var determineLastClockOut = function (recentShifts, clockIn) {
+const determineLastClockOut = (recentShifts, clockIn) => {
     if (clockIn) {
         return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.lastShift[1];
     }
     else {
-        return recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.secondLastShift[1];
+        return (recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.secondLastShift) ? recentShifts === null || recentShifts === void 0 ? void 0 : recentShifts.secondLastShift[1] : undefined;
     }
 };
-var getAllShiftsForCurrentAndLastMonth = function (currentMonthLog, pastMonthLog) {
-    var allShiftsArray = [];
+const getAllShiftsForCurrentAndLastMonth = (currentMonthLog, pastMonthLog) => {
+    const allShiftsArray = [];
     if (pastMonthLog) {
-        Object.values(pastMonthLog).forEach(function (shiftArray) {
-            shiftArray.forEach(function (shift) {
+        Object.values(pastMonthLog).forEach((shiftArray) => {
+            shiftArray.forEach(shift => {
                 allShiftsArray.push(shift);
             });
         });
     }
     if (currentMonthLog) {
-        Object.values(currentMonthLog).forEach(function (shiftArray) {
-            shiftArray.forEach(function (shift) {
+        Object.values(currentMonthLog).forEach((shiftArray) => {
+            shiftArray.forEach(shift => {
                 allShiftsArray.push(shift);
             });
         });
     }
     return allShiftsArray;
 };
-var getMostRecentShiftsInfo = function (currentMonthLog, pastMonthLog) {
-    var allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
+const getMostRecentShiftsInfo = (currentMonthLog, pastMonthLog) => {
+    const allShiftsArray = getAllShiftsForCurrentAndLastMonth(currentMonthLog, pastMonthLog);
     if (!allShiftsArray.length) {
-        return undefined;
+        return null;
     }
-    var lastShift = allShiftsArray[allShiftsArray.length - 1];
-    var secondLastShift = allShiftsArray.length > 1 ? allShiftsArray[allShiftsArray.length - 2] : undefined;
-    return { lastShift: lastShift, secondLastShift: secondLastShift };
+    const lastShift = allShiftsArray[allShiftsArray.length - 1];
+    const secondLastShift = allShiftsArray.length > 1 ? allShiftsArray[allShiftsArray.length - 2] : null;
+    return { lastShift, secondLastShift };
 };
-var getHoursAndShiftsWorkedForDay = function (clockTime, clockedIn) {
-    var clockTimeComponents = getTimeComponents(clockTime);
-    var currentMonthLog = getMonthLogSafe(clockTimeComponents.calendarMonth, clockTimeComponents.year);
-    var todayShifts = currentMonthLog[clockTimeComponents.date] || [];
-    var totalHours = todayShifts.reduce(function (cumHours, shift, shiftIndex, shiftArray) {
+const getHoursAndShiftsWorkedForDay = (clockTime, clockedIn) => {
+    const clockTimeComponents = getTimeComponents(clockTime);
+    const currentMonthLog = getMonthLogSafe(clockTimeComponents.calendarMonth, clockTimeComponents.year);
+    const todayShifts = currentMonthLog[clockTimeComponents.date] || [];
+    const totalHours = todayShifts.reduce((cumHours, shift, shiftIndex, shiftArray) => {
         //check for scenarios where the most recent shift shouldn't have a clock-out, then add a value when last shift is reached
         if (clockedIn && (shiftIndex === shiftArray.length - 1)) {
-            var timeToUse = clockTimeComponents.ms;
+            const timeToUse = clockTimeComponents.ms;
             return cumHours + ((timeToUse - shift[0]) / 3600000);
         }
         else {
@@ -297,31 +292,31 @@ var getHoursAndShiftsWorkedForDay = function (clockTime, clockedIn) {
             return cumHours + ((shift[1] - shift[0]) / 3600000);
         }
     }, 0);
-    var totalShifts = todayShifts.length;
-    return { totalHours: totalHours, totalShifts: totalShifts };
+    const totalShifts = todayShifts.length;
+    return { totalHours, totalShifts };
 };
 /**
  *
  * @param passedDate if checking for week containing current day, pass in nothing
  * @returns
  */
-var getHoursForWeekContainingDate = function (passedDate) {
-    var _a = determineDatesToGetForAWeek(passedDate), datesToGet = _a.datesToGet, monthLogs = _a.monthLogs, dateComponents = _a.dateComponents;
-    var hoursForWeek = datesToGet.reduce(function (cumHours, dateTuple) {
-        var month = dateTuple[0];
-        var date = dateTuple[1];
-        var shiftArrayForDate = monthLogs[month][date];
-        var hoursForDate;
+const getHoursForWeekContainingDate = (passedDate) => {
+    const { datesToGet, monthLogs, dateComponents } = determineDatesToGetForAWeek(passedDate);
+    const hoursForWeek = datesToGet.reduce((cumHours, dateTuple) => {
+        const month = dateTuple[0];
+        const date = dateTuple[1];
+        const shiftArrayForDate = monthLogs[month][date];
+        let hoursForDate;
         if (!shiftArrayForDate) {
             hoursForDate = 0;
         }
         else {
-            hoursForDate = shiftArrayForDate.reduce(function (cumHours, shift) {
-                if (shift[1]) {
+            hoursForDate = shiftArrayForDate.reduce((cumHours, shift) => {
+                if (shift[1] && shift[0]) {
                     return cumHours + ((shift[1] - shift[0]) / 3600000);
                 }
                 else {
-                    if (!passedDate) {
+                    if (!passedDate && shift[0]) {
                         //indicates most likely currently clocked in - use current time
                         return cumHours + ((dateComponents.ms - shift[0]) / 3600000);
                     }
@@ -336,74 +331,71 @@ var getHoursForWeekContainingDate = function (passedDate) {
     }, 0);
     return hoursForWeek;
 };
-var getDaysForWeekContainingDate = function (passedDate) {
-    var _a = determineDatesToGetForAWeek(passedDate), datesToGet = _a.datesToGet, monthLogs = _a.monthLogs;
-    var daysInWeekWithShifts = datesToGet.reduce(function (cumDays, dateTuple) {
-        var month = dateTuple[0];
-        var date = dateTuple[1];
-        var dateHasShifts = !!monthLogs[month][date];
+const getDaysForWeekContainingDate = (passedDate) => {
+    const { datesToGet, monthLogs } = determineDatesToGetForAWeek(passedDate);
+    const daysInWeekWithShifts = datesToGet.reduce((cumDays, dateTuple) => {
+        const month = dateTuple[0];
+        const date = dateTuple[1];
+        const dateHasShifts = !!monthLogs[month][date];
         return cumDays + (dateHasShifts ? 1 : 0);
     }, 0);
     return daysInWeekWithShifts;
 };
-var determineDatesToGetForAWeek = function (passedDate) {
-    var dateToUse = passedDate || new Date();
-    var dateComponents = getTimeComponents(dateToUse);
-    var monthsToGet = [];
+const determineDatesToGetForAWeek = (passedDate) => {
+    const dateToUse = passedDate || new Date();
+    const dateComponents = getTimeComponents(dateToUse);
+    const monthsToGet = [];
     // [month, date]
-    var datesToGet = [];
-    var _loop_1 = function (i) {
-        var date = new Date(dateComponents.year, dateComponents.calendarMonth - 1, dateComponents.date + i);
+    const datesToGet = [];
+    //day starts at 0 for Sunday; this will start the for loop at this week's Sunday and go until "today"
+    for (let i = dateComponents.day * -1; i < (7 - dateComponents.day); i++) {
+        const date = new Date(dateComponents.year, dateComponents.calendarMonth - 1, dateComponents.date + i);
         //if week spans 2 months, need to grab previous month as well
-        if (!monthsToGet.some(function (month) { return month === date.getMonth() + 1; })) {
+        if (!monthsToGet.some(month => month === date.getMonth() + 1)) {
             monthsToGet.push(date.getMonth() + 1);
         }
         //the same date will never appear in one week
         datesToGet.push([date.getMonth() + 1, date.getDate()]);
-    };
-    //day starts at 0 for Sunday; this will start the for loop at this week's Sunday and go until "today"
-    for (var i = dateComponents.day * -1; i < (7 - dateComponents.day); i++) {
-        _loop_1(i);
     }
-    var monthLogs = {};
-    monthsToGet.forEach(function (month) {
+    const monthLogs = {};
+    monthsToGet.forEach(month => {
         monthLogs[month] = getMonthLogSafe(month, dateComponents.year);
     });
-    return { datesToGet: datesToGet, monthLogs: monthLogs, dateComponents: dateComponents };
+    return { datesToGet, monthLogs, dateComponents };
 };
-var getFourAndEightWeekAverageHours = function () {
-    var today = new Date();
-    var todayComponents = getTimeComponents(today);
-    var totalHours = 0;
-    for (var i = 7; i <= 28; i = i + 7) {
-        var weekHours = getHoursForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
+const getFourAndEightWeekAverageHours = () => {
+    const today = new Date();
+    const todayComponents = getTimeComponents(today);
+    let totalHours = 0;
+    for (let i = 7; i <= 28; i = i + 7) {
+        const weekHours = getHoursForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
         totalHours = totalHours + weekHours;
     }
-    var fourWeekAverage = totalHours / 4;
-    for (var i = 35; i <= 56; i = i + 7) {
-        var weekHours = getHoursForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
+    const fourWeekAverage = totalHours / 4;
+    for (let i = 35; i <= 56; i = i + 7) {
+        const weekHours = getHoursForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
         totalHours = totalHours + weekHours;
     }
-    var eightWeekAverage = totalHours / 8;
-    return { fourWeekAverage: fourWeekAverage, eightWeekAverage: eightWeekAverage };
+    const eightWeekAverage = totalHours / 8;
+    return { fourWeekAverage, eightWeekAverage };
 };
-var getFourAndEightWeekAverageDays = function () {
-    var today = new Date();
-    var todayComponents = getTimeComponents(today);
-    var totalDays = 0;
-    for (var i = 7; i <= 28; i = i + 7) {
-        var weekDays = getDaysForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
+const getFourAndEightWeekAverageDays = () => {
+    const today = new Date();
+    const todayComponents = getTimeComponents(today);
+    let totalDays = 0;
+    for (let i = 7; i <= 28; i = i + 7) {
+        const weekDays = getDaysForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
         totalDays = totalDays + weekDays;
     }
-    var fourWeekAverageDays = totalDays / 4;
-    for (var i = 35; i <= 56; i = i + 7) {
-        var weekDays = getDaysForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
+    const fourWeekAverageDays = totalDays / 4;
+    for (let i = 35; i <= 56; i = i + 7) {
+        const weekDays = getDaysForWeekContainingDate(new Date(todayComponents.year, todayComponents.calendarMonth - 1, todayComponents.date - i));
         totalDays = totalDays + weekDays;
     }
-    var eightWeekAverageDays = totalDays / 8;
-    return { fourWeekAverageDays: fourWeekAverageDays, eightWeekAverageDays: eightWeekAverageDays };
+    const eightWeekAverageDays = totalDays / 8;
+    return { fourWeekAverageDays, eightWeekAverageDays };
 };
-var getTimeComponents = function (dateObject) {
+const getTimeComponents = (dateObject) => {
     return {
         year: dateObject.getFullYear(),
         calendarMonth: dateObject.getMonth() + 1,
@@ -418,8 +410,8 @@ var getTimeComponents = function (dateObject) {
  * @param allShifts array of allShifts from current and previous month logs
  * @returns filtered array of same type with only invalid shifts
  */
-var getInvalidShifts = function (allShifts) {
-    var invalidShifts = allShifts.filter(function (shift, index) {
+const getInvalidShifts = (allShifts) => {
+    const invalidShifts = allShifts.filter((shift, index) => {
         if (index !== allShifts.length - 1) {
             // if not at last index, any null value means missed clock/invalid shift
             return !shift[0] || !shift[1];

@@ -20,7 +20,7 @@ export interface HoursAndShifts {
 
 export interface RecentShifts {
 	lastShift: Shift,
-	secondLastShift: Shift | undefined
+	secondLastShift: Shift | null
 }
 
 export type ClockEventTypes = "clockOut" | "clockIn" | "check"
